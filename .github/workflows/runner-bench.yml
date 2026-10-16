@@ -1,0 +1,29 @@
+name: Runner bench
+
+on:
+  push:
+    branches: [ci/runner-bench]
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: [self-hosted, linux, x64, anyps5]
+    timeout-minutes: 90
+    env:
+      CONFIGURE: >-
+        -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+        -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      CCACHE_DIR: /var/cache/anyps5/ccache
+      CCACHE_MAXSIZE: 30G
+      CCACHE_COMPILERCHECK: content
+      MESA_SHADER_CACHE_DIR: /var/cache/anyps5/mesa
+      MESA_SHADER_CACHE_MAX_SIZE: 4G
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - run: bash tools/runner-bench.sh
