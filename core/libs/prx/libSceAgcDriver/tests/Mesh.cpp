@@ -338,7 +338,7 @@ int main() {
         if (!testDevice) return VulkanTestSkipped;
         auto& device = *testDevice;
         const auto target = device.Target();
-        if (!target.mesh.has_value()) {
+        if (!target.mesh.has_value() && !target.meshAsCompute) {
             std::puts("skipped, the device has no VK_EXT_mesh_shader");
             return VulkanTestSkipped;
         }
