@@ -453,8 +453,10 @@ DrawVerdict Driver::draw(QueueState& queue, std::span<const std::uint32_t> packe
     };
     if (graphics.rectList) buildRectList();
     if (!programs.empty() && programResults.back() != nullptr && programResults.back()->barycentricEmulation.active) {
-        require(!graphics.rectList && graphics.stages.path == Graphics::ShaderPath::Vertex && programs.size() == 2 && programResults[0] != nullptr && stages.size() == 2, "a pixel shader that reads barycentrics without VK_KHR_fragment_shader_barycentric needs a vertex shader before it");
+        const bool meshCompute = graphics.stages.path == Graphics::ShaderPath::Geometry && programResults[0] != nullptr && programResults[0]->meshRecordLayout != 0;
+        require(!graphics.rectList && (graphics.stages.path == Graphics::ShaderPath::Vertex || meshCompute) && programs.size() == 2 && programResults[0] != nullptr && stages.size() == 2, "a pixel shader that reads barycentrics without VK_KHR_fragment_shader_barycentric needs a vertex shader before it");
         const auto geometryLimits = localDevice->GeometryLimits();
+        require(!meshCompute || geometryLimits, "a mesh-path draw run as compute emulates barycentrics only with geometry shaders");
         if (geometryLimits || !localDevice->Target().tessellation) {
             results.push_back(ShaderRecompiler::BuildBarycentricGeometryShader(*programResults[0], *programResults[1], localDevice->Target(), geometryLimits));
             stages.insert(stages.begin() + 1, Graphics::CompiledShader{Stage::Geometry, &results.back(), 0});

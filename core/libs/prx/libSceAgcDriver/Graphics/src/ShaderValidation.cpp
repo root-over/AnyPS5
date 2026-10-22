@@ -651,8 +651,10 @@ std::set<std::uint32_t> ValidateShaders(std::span<const CompiledShader> shaders,
     Require(!state.rectList || (state.stages.path == ShaderPath::Vertex && state.topology == VK_PRIMITIVE_TOPOLOGY_PATCH_LIST && state.cullMode == VK_CULL_MODE_NONE), "invalid rect-list pipeline state");
     const bool geometry = state.stages.path == ShaderPath::Vertex && !state.rectList && shaders.size() == 3u;
     const bool patches = BarycentricPatches(state, shaders) && shaders.back().program != nullptr && shaders.back().program->barycentricEmulation.active;
-    const bool meshCompute = mesh && shaders.size() == 3u && shaders.front().stage == Stage::Compute;
-    Require(geometry || shaders.size() == (tessellation || state.rectList || patches ? 4u : meshCompute ? 3u : 2u), "incorrect graphics stage count");
+    const bool meshCompute = mesh && (shaders.size() == 3u || shaders.size() == 4u) && shaders.front().stage == Stage::Compute;
+    const bool meshComputeGeometry = meshCompute && shaders.size() == 4u;
+    Require(geometry || meshComputeGeometry || shaders.size() == (tessellation || state.rectList || patches ? 4u : meshCompute ? 3u : 2u), "incorrect graphics stage count");
+    if (meshComputeGeometry) Require(shaders.back().program != nullptr && shaders.back().program->barycentricEmulation.active, "a geometry stage is generated only for emulated barycentrics");
     if (patches) Require(state.topology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, "emulated barycentrics through tessellation require a triangle list");
     if (geometry) {
         Require(shaders.back().program != nullptr && shaders.back().program->barycentricEmulation.active, "a geometry stage is generated only for emulated barycentrics");
@@ -660,10 +662,11 @@ std::set<std::uint32_t> ValidateShaders(std::span<const CompiledShader> shaders,
     }
     const std::array<Stage, 4> tessStages{Stage::Local, Stage::TessellationControl, Stage::TessellationEvaluation, Stage::Fragment};
     const std::array<Stage, 3> meshComputeStages{Stage::Compute, Stage::Vertex, Stage::Fragment};
+    const std::array<Stage, 4> meshComputeGeometryStages{Stage::Compute, Stage::Vertex, Stage::Geometry, Stage::Fragment};
     static_cast<void>(AssemblePushConstants(shaders));
     Module previous;
     for (std::size_t i = 0; i < shaders.size(); ++i) {
-        const auto expected = meshCompute ? meshComputeStages[i] : state.rectList || patches ? (i == 0 ? Stage::Vertex : tessStages[i]) : tessellation ? tessStages[i] : geometry && i == 1 ? Stage::Geometry : i == shaders.size() - 1 ? Stage::Fragment : state.stages.path == ShaderPath::Geometry ? Stage::Mesh : Stage::Vertex;
+        const auto expected = meshComputeGeometry ? meshComputeGeometryStages[i] : meshCompute ? meshComputeStages[i] : state.rectList || patches ? (i == 0 ? Stage::Vertex : tessStages[i]) : tessellation ? tessStages[i] : geometry && i == 1 ? Stage::Geometry : i == shaders.size() - 1 ? Stage::Fragment : state.stages.path == ShaderPath::Geometry ? Stage::Mesh : Stage::Vertex;
         Require(shaders[i].program != nullptr, "missing compiled shader");
         Require(shaders[i].stage == expected, "graphics stage order disagrees");
         for (const auto& binding : shaders[i].program->bindings) Require(binding.descriptorSet == ShaderRecompiler::RuntimeAbi::DescriptorSet || (shaders[i].stage == ShaderRecompiler::ShaderStage::Fragment && binding.descriptorSet == ShaderRecompiler::RuntimeAbi::FragmentDescriptorSet), "graphics resource uses a descriptor set other than its stage's");

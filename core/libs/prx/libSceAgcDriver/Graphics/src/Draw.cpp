@@ -841,7 +841,7 @@ MeshArgumentRules MeshArgumentRulesFor(const Context& context, const ShaderRecom
 std::vector<CompiledShader> MeshComputeStages(const Context& context, const State& state, std::span<const CompiledShader> shaders) {
     using Stage = ShaderRecompiler::ShaderStage;
     if (!MeshDrawRunsAsCompute(context, state) || shaders.empty() || shaders.front().stage != Stage::Mesh) return {};
-    Require(shaders.size() == 2u && shaders.front().program != nullptr && shaders.front().program->variantId != 0, "a mesh program run as compute needs one fragment stage and a variant id");
+    Require((shaders.size() == 2u || (shaders.size() == 3u && shaders[1].stage == Stage::Geometry)) && shaders.front().program != nullptr && shaders.front().program->variantId != 0, "a mesh program run as compute needs one fragment stage and a variant id");
     static std::mutex mutex;
     static std::map<std::uint64_t, std::unique_ptr<const ShaderRecompiler::RecompileResult>> readbacks;
     const auto& mesh = *shaders.front().program;
@@ -853,6 +853,7 @@ std::vector<CompiledShader> MeshComputeStages(const Context& context, const Stat
         if (entry == nullptr) entry = std::make_unique<const ShaderRecompiler::RecompileResult>(ShaderRecompiler::BuildMeshReadbackVertexShader(mesh, VK_API_VERSION_1_1));
         readback = entry.get();
     }
+    if (shaders.size() == 3u) return {{Stage::Compute, &mesh, shaders.front().pushConstantOffset}, {Stage::Vertex, readback, shaders.front().pushConstantOffset}, shaders[1], shaders.back()};
     return {{Stage::Compute, &mesh, shaders.front().pushConstantOffset}, {Stage::Vertex, readback, shaders.front().pushConstantOffset}, shaders.back()};
 }
 
