@@ -10216,6 +10216,16 @@ void meshArgumentTests() {
         refusal = error.what();
     }
     Require(refusal.find("compute subgroups at least as wide as its wave") != std::string::npos, "a wave-32 mesh program ran as compute on 8-lane subgroups: " + refusal);
+    AgcDriver::Graphics::Context wide{};
+    wide.subgroup.subgroupSize = 32;
+    program.hostSubgroupSize = 32;
+    program.spirv = std::vector<std::uint32_t>{spv::MagicNumber, 0x10300u, 0u, 1u, 0u};
+    const ShaderRecompiler::RecompileResult geometry{};
+    const std::array<AgcDriver::Graphics::CompiledShader, 3> barycentric{{{ShaderRecompiler::ShaderStage::Mesh, &program, 0}, {ShaderRecompiler::ShaderStage::Geometry, &geometry, 0}, {ShaderRecompiler::ShaderStage::Fragment, &fragment, 0}}};
+    const auto withGeometry = AgcDriver::Graphics::MeshComputeStages(wide, waved, barycentric);
+    Require(withGeometry.size() == 4 && withGeometry[0].stage == ShaderRecompiler::ShaderStage::Compute && withGeometry[1].stage == ShaderRecompiler::ShaderStage::Vertex && withGeometry[2].program == &geometry && withGeometry[3].program == &fragment, "a barycentric geometry stage did not stay between the readback vertex shader and the fragment stage");
+    const std::array<AgcDriver::Graphics::CompiledShader, 3> extra{{{ShaderRecompiler::ShaderStage::Mesh, &program, 0}, {ShaderRecompiler::ShaderStage::Vertex, &geometry, 0}, {ShaderRecompiler::ShaderStage::Fragment, &fragment, 0}}};
+    expectFailure([&] { static_cast<void>(AgcDriver::Graphics::MeshComputeStages(wide, waved, extra)); }, "needs one fragment stage");
 }
 
 void debugBranchTests() {
